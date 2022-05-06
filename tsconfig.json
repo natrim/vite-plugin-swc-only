@@ -1,0 +1,23 @@
+{
+    "include": [
+        "src"
+    ],
+    "compilerOptions": {
+        "target": "es2019",
+        "lib": [
+            "es2019"
+        ],
+        "module": "commonjs",
+        "skipLibCheck": true,
+        "declaration": true,
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "forceConsistentCasingInFileNames": true,
+        "esModuleInterop": true,
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "useUnknownInCatchVariables": true
+    }
+}
