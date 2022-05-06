@@ -195,15 +195,12 @@ export const build: (options: Options) => PluginOption = ({
     );
   if (!build) return null;
 
-  let targets: any = undefined;
-
   return {
     name: "swc-build",
     apply: "build",
     config: (config) => {
       if (config.esbuild) define = config.esbuild.define;
       config.esbuild = false;
-      targets = config.build?.target;
       tsConfigCache["build"] = undefined;
     },
     async transform(code, id) {
@@ -221,15 +218,6 @@ export const build: (options: Options) => PluginOption = ({
         filename: id,
         swcrc: false,
         configFile: false,
-        env: {
-          targets:
-            targets === "modules"
-              ? ["es2019", "edge88", "firefox78", "chrome87", "safari13.1"]
-              : targets,
-          mode: "usage",
-          // @ts-ignore
-          coreJs: 3,
-        },
         ...swcOptions,
         // always needs sourcemap in transform build to map back
         sourceMaps: true,

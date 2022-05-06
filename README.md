@@ -40,17 +40,6 @@ export default defineConfig({
 });
 ```
 
-## Polyfill and Transpiler
-
-To enable polyfill, you would need to
-
-- install `browserlist` as a devDependency
-- install `core-js` as a dependency
-
-```bash
-npm i browserlist && npm i -D core-js
-```
-
 ## Problems
 
 If you use this plugin only for `serve` and/or `minify` and not use `vite-plugin-react`, then you will need to add extra
