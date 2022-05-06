@@ -1,0 +1,11 @@
+.github/
+.git/
+.idea/
+.vscode/
+node_modules/
+.editorconfig
+.gitignore
+.prettierrc
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
