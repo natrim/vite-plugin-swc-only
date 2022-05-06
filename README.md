@@ -9,7 +9,7 @@ Only React for now, pulls welcome.
 - Don't need `vite-plugin-react`
 - Support for `React Fast Refresh` - faster than the `vite-plugin-react` with babel
 - Skip `import React`,`React` is dynamically injected
-- `swc` minification instead of `esbuild` or `terser` (as minification is sorta unstable, added shortcut `swcMinify` option to fine tune)
+- `swc` minification instead of `esbuild` or `terser` (no css minify as that is hardcoded to esbuild)
 - 3 separate plugins for each mode available (serve, build, minify)
 
 - `serve` - applied only in dev (apply: serve), contains `React Fast Refresh`

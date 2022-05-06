@@ -1,5 +1,6 @@
 .idea/
 .vscode/
 node_modules/
-/lib/index.d.ts
-/lib/index.js
+/lib/*.d.ts
+/lib/*.js
+!/lib/react-refresh-runtime.js
