@@ -40,6 +40,22 @@ export default defineConfig({
 });
 ```
 
+## Polyfill
+
+To enable polyfill, you would need to
+
+- install `browserlist` as a devDependency
+- install `core-js` as a dependency
+
+```bash
+npm i browserlist && npm i -D core-js
+```
+
+## ES5
+
+If your target browser only supports ES5, you may want to
+checkout [`@vitejs/plugin-legacy`](https://github.com/vitejs/vite/tree/main/packages/plugin-legacy).
+
 ## Problems
 
 If you use this plugin only for `serve` and/or `minify` and not use `vite-plugin-react`, then you will need to add extra
@@ -59,5 +75,56 @@ export default defineConfig({
     jsxInject:
       "import { createElement as _jsx, Fragment as _jsxFragment } from 'react'",
   },
+});
+```
+
+## Examples
+
+### disable HMR
+
+```ts
+import { defineConfig } from "vite";
+import swc from "vite-plugin-swc-only";
+
+export default defineConfig({
+  plugins: [
+    swc({
+      refresh: false,
+    }),
+  ],
+});
+```
+
+### Classic JSX runtime
+
+You need to include `import React from 'react';` in every tsx file yourself.
+
+```ts
+import { defineConfig } from "vite";
+import swc from "vite-plugin-swc-only";
+
+export default defineConfig({
+  plugins: [
+    swc({
+      runtime: "classic",
+    }),
+  ],
+});
+```
+
+### Disable minification
+
+If there is ie. problem with minification on your `swc` version, it will fallback back to esbuild.
+
+```ts
+import { defineConfig } from "vite";
+import swc from "vite-plugin-swc-only";
+
+export default defineConfig({
+  plugins: [
+    swc({
+      minify: false,
+    }),
+  ],
 });
 ```

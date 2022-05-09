@@ -32,7 +32,7 @@
         "trailingComma": "all"
     },
     "dependencies": {
-        "@swc/core": "^1.2.177"
+        "@swc/core": "^1.2.179"
     },
     "peerDependencies": {
         "@swc/core": "^1.2.177",
