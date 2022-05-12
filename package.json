@@ -1,7 +1,7 @@
 {
     "name": "vite-plugin-swc-only",
     "description": "Use the swc in vite",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "license": "MIT",
     "author": "Natrim (https://github.com/natrim)",
     "main": "lib/index.js",
