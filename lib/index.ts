@@ -39,10 +39,6 @@ type Options = {
    */
   target?: JscTarget;
   /**
-   * @default vite's config.build.sourcemap
-   */
-  sourcemap?: boolean;
-  /**
    * @default { minify: { toplevel: false }, mangle: true }
    */
   minifyOptions?: JsMinifyOptions;
@@ -72,7 +68,6 @@ export const serve: (options: Options) => PluginOption = ({
   refresh = true,
   runtime = "automatic",
   target,
-  sourcemap,
   minifyOptions,
   ...swcOptions
 }: Options = {}) => {
@@ -102,6 +97,7 @@ export const serve: (options: Options) => PluginOption = ({
   return {
     name: "swc-serve",
     apply: "serve",
+    enforce: "pre",
     config: (config) => {
       if (config.esbuild) define = config.esbuild.define;
       config.esbuild = false;
@@ -120,10 +116,12 @@ export const serve: (options: Options) => PluginOption = ({
       const tsconfig = await getTsConfigOptions("serve");
 
       const result = await transform(code, {
-        filename: id,
         swcrc: false,
         configFile: false,
         ...swcOptions,
+        filename: id,
+        inputSourceMap: false,
+        sourceMaps: true,
         jsc: {
           target:
             typeof target !== "undefined"
@@ -188,7 +186,6 @@ export const build: (options: Options) => PluginOption = ({
   refresh = true,
   runtime = "automatic",
   target,
-  sourcemap,
   minifyOptions,
   ...swcOptions
 }: Options = {}) => {
@@ -204,6 +201,7 @@ export const build: (options: Options) => PluginOption = ({
   return {
     name: "swc-build",
     apply: "build",
+    enforce: "pre",
     config: (config) => {
       if (config.esbuild) define = config.esbuild.define;
       config.esbuild = false;
@@ -233,7 +231,6 @@ export const build: (options: Options) => PluginOption = ({
       const tsconfig = await getTsConfigOptions("build");
 
       return await transform(code, {
-        filename: id,
         swcrc: false,
         configFile: false,
         env: hasBrowserList
@@ -249,7 +246,8 @@ export const build: (options: Options) => PluginOption = ({
             }
           : undefined,
         ...swcOptions,
-        // always needs sourcemap in transform build to map back
+        filename: id,
+        inputSourceMap: false,
         sourceMaps: true,
         jsc: {
           target:
@@ -304,7 +302,6 @@ export const minify: (options: Options) => PluginOption = ({
   refresh = true,
   runtime = "automatic",
   target,
-  sourcemap,
   minifyOptions,
   ...swcOptions
 }: Options = {}) => {
@@ -313,7 +310,7 @@ export const minify: (options: Options) => PluginOption = ({
       "cannot use build or serve in minify plugin, use plugins separately or use the all helper",
     );
   if (!minify) return null;
-  let sourcemaps = true;
+  let libBuild = false;
   return {
     name: "swc-minify",
     apply: "build",
@@ -321,22 +318,32 @@ export const minify: (options: Options) => PluginOption = ({
     config: (config) => {
       if (!config.build) config.build = {};
       config.build.minify = false;
-      sourcemaps = !!config.build.sourcemap;
       tsConfigCache["minify"] = undefined;
+      if (config.build.lib) {
+        libBuild = true;
+      }
     },
-    async renderChunk(code, chunk) {
+    async renderChunk(code, chunk, outputOptions) {
       const tsconfig = await getTsConfigOptions("minify");
 
+      // Do not minify ES lib output since that would remove pure annotations
+      // and break tree-shaking.
+      if (libBuild && outputOptions.format === "es") {
+        return null;
+      }
+
       return await transform(code, {
-        sourceMaps: typeof sourcemap !== "undefined" ? sourcemap : sourcemaps,
         swcrc: false,
         configFile: false,
         ...swcOptions,
+        sourceMaps: true,
+        inputSourceMap: false,
         filename: chunk.fileName,
         // minify is always on if we got here
         minify: true,
         jsc: {
           minify: {
+            safari10: true,
             compress:
               minifyOptions?.compress === false
                 ? false
@@ -348,6 +355,9 @@ export const minify: (options: Options) => PluginOption = ({
                   },
             mangle: true,
             ...minifyOptions,
+            sourceMap: !!outputOptions.sourcemap,
+            module: outputOptions.format.startsWith("es"),
+            toplevel: outputOptions.format === "cjs",
           },
           target:
             typeof target !== "undefined"
