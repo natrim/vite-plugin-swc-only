@@ -11,6 +11,24 @@ import type { PluginOption } from "vite";
 const runtimePublicPath = "/@react-refresh";
 const refreshLoadCode = `import{injectIntoGlobalHook}from"${runtimePublicPath}";injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>(type)=>type;`;
 
+const validFilename = (id: string) => {
+  if (id.includes("node_modules")) return { ok: false };
+  const [filepath, querystring = ""] = id.split("?");
+  const ext =
+    (querystring.indexOf(".") !== -1
+      ? querystring.substring(querystring.lastIndexOf("."))
+      : "") ||
+    (filepath.indexOf(".") !== -1
+      ? filepath.substring(filepath.lastIndexOf("."))
+      : "") ||
+    "";
+  const isTS = ext === ".ts" || ext === ".tsx";
+  const isJSX = ext === ".jsx" || ext === ".tsx";
+  if (!(isTS || isJSX || ext === ".js" || ext === ".mjs")) return { ok: false };
+
+  return { ok: true, isTS, isJSX, ext, filepath, querystring };
+};
+
 let define: { [key: string]: string } | undefined;
 
 type Options = {
@@ -105,13 +123,8 @@ export const serve: (options: Options) => PluginOption = ({
     },
     ...refreshStuffLoad,
     async transform(code, id) {
-      if (id.includes("node_modules")) return;
-      const ext = id.substring(id.length - 3);
-      if (!(ext === ".js" || ext === ".ts" || ext === "jsx" || ext === "tsx"))
-        return;
-
-      const isTS = ext === ".ts" || ext === "tsx";
-      const isJSX = ext === "jsx" || ext === "tsx";
+      const { ok, isTS, isJSX, filepath } = validFilename(id);
+      if (!ok) return;
 
       const tsconfig = await getTsConfigOptions("serve");
 
@@ -120,6 +133,7 @@ export const serve: (options: Options) => PluginOption = ({
         configFile: false,
         ...swcOptions,
         filename: id,
+        sourceFileName: filepath,
         inputSourceMap: false,
         sourceMaps: true,
         jsc: {
@@ -197,36 +211,31 @@ export const build: (options: Options) => PluginOption = ({
 
   let targets: any = undefined;
   let hasBrowserList = false;
+  try {
+    // @ts-ignore
+    await import("browserlist");
+    hasBrowserList = true;
+  } catch (e) {
+    hasBrowserList = false;
+    if (swcOptions?.env) {
+      console.error('"browserlist" is not installed!');
+      process.exit(1);
+    }
+  }
 
   return {
     name: "swc-build",
     apply: "build",
     enforce: "pre",
-    config: (config) => {
+    config: async (config) => {
       if (config.esbuild) define = config.esbuild.define;
       config.esbuild = false;
       targets = config.build?.target;
       tsConfigCache["build"] = undefined;
-
-      try {
-        require("browserlist");
-        hasBrowserList = true;
-      } catch (e) {
-        hasBrowserList = false;
-        if (swcOptions?.env) {
-          console.error('"browserlist" is not installed!');
-          process.exit(1);
-        }
-      }
     },
     async transform(code, id) {
-      if (id.includes("node_modules")) return;
-      const ext = id.substring(id.length - 3);
-      if (!(ext === ".js" || ext === ".ts" || ext === "jsx" || ext === "tsx"))
-        return;
-
-      const isTS = ext === ".ts" || ext === "tsx";
-      const isJSX = ext === "jsx" || ext === "tsx";
+      const { ok, isTS, isJSX, filepath } = validFilename(id);
+      if (!ok) return;
 
       const tsconfig = await getTsConfigOptions("build");
 
@@ -247,6 +256,7 @@ export const build: (options: Options) => PluginOption = ({
           : undefined,
         ...swcOptions,
         filename: id,
+        sourceFileName: filepath,
         inputSourceMap: false,
         sourceMaps: true,
         jsc: {
@@ -310,7 +320,6 @@ export const minify: (options: Options) => PluginOption = ({
       "cannot use build or serve in minify plugin, use plugins separately or use the all helper",
     );
   if (!minify) return null;
-  let libBuild = false;
   return {
     name: "swc-minify",
     apply: "build",
@@ -319,18 +328,9 @@ export const minify: (options: Options) => PluginOption = ({
       if (!config.build) config.build = {};
       config.build.minify = false;
       tsConfigCache["minify"] = undefined;
-      if (config.build.lib) {
-        libBuild = true;
-      }
     },
     async renderChunk(code, chunk, outputOptions) {
       const tsconfig = await getTsConfigOptions("minify");
-
-      // Do not minify ES lib output since that would remove pure annotations
-      // and break tree-shaking.
-      if (libBuild && outputOptions.format === "es") {
-        return null;
-      }
 
       return await transform(code, {
         swcrc: false,
@@ -339,7 +339,6 @@ export const minify: (options: Options) => PluginOption = ({
         sourceMaps: true,
         inputSourceMap: false,
         filename: chunk.fileName,
-        // minify is always on if we got here
         minify: true,
         jsc: {
           minify: {
