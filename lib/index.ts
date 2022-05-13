@@ -211,17 +211,6 @@ export const build: (options: Options) => PluginOption = ({
 
   let targets: any = undefined;
   let hasBrowserList = false;
-  try {
-    // @ts-ignore
-    await import("browserlist");
-    hasBrowserList = true;
-  } catch (e) {
-    hasBrowserList = false;
-    if (swcOptions?.env) {
-      console.error('"browserlist" is not installed!');
-      process.exit(1);
-    }
-  }
 
   return {
     name: "swc-build",
@@ -232,6 +221,18 @@ export const build: (options: Options) => PluginOption = ({
       config.esbuild = false;
       targets = config.build?.target;
       tsConfigCache["build"] = undefined;
+
+      try {
+        // @ts-ignore
+        await import("browserlist");
+        hasBrowserList = true;
+      } catch (e) {
+        hasBrowserList = false;
+        if (swcOptions?.env) {
+          console.error('"browserlist" is not installed!');
+          process.exit(1);
+        }
+      }
     },
     async transform(code, id) {
       const { ok, isTS, isJSX, filepath } = validFilename(id);
