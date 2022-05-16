@@ -77,7 +77,7 @@ const getTsConfigOptions = async (mode: "build" | "serve" | "minify") => {
         return Promise.resolve({});
       }
     }
-    tsConfigCache[mode] = await import(file);
+    tsConfigCache[mode] = await import(file, { assert: { type: "json" } });
   }
 
   return Promise.resolve(tsConfigCache[mode]);
