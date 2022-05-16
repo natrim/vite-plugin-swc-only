@@ -16,5 +16,6 @@ fs.writeFileSync(
     .replace(
       'const __dirname = url.fileURLToPath(new URL(".", import.meta.url));',
       "",
-    ),
+    )
+    .replace('file, { assert: { type: "json" } }', "file"),
 );
