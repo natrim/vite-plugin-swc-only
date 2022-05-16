@@ -3,11 +3,11 @@
         "lib"
     ],
     "compilerOptions": {
-        "target": "es2019",
+        "target": "ES2020",
         "lib": [
-            "es2019"
+            "ES2020"
         ],
-        "module": "commonjs",
+        "module": "ES2020",
         "skipLibCheck": true,
         "declaration": true,
         "moduleResolution": "node",

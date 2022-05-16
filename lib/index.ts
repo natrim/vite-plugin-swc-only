@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import * as fs from "fs";
+import * as path from "path";
 import type {
   JscTarget,
   JsMinifyOptions,
@@ -7,6 +7,9 @@ import type {
 } from "@swc/core";
 import { transform } from "@swc/core";
 import type { PluginOption } from "vite";
+import * as url from "url";
+
+const __dirname = url.fileURLToPath(new URL(".", import.meta.url));
 
 const runtimePublicPath = "/@react-refresh";
 const refreshLoadCode = `import{injectIntoGlobalHook}from"${runtimePublicPath}";injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>(type)=>type;`;
@@ -24,7 +27,8 @@ const validFilename = (id: string) => {
     "";
   const isTS = ext === ".ts" || ext === ".tsx";
   const isJSX = ext === ".jsx" || ext === ".tsx";
-  if (!(isTS || isJSX || ext === ".js" || ext === ".mjs")) return { ok: false };
+  if (!(isTS || isJSX || ext === ".js" || ext === ".mjs" || ext === ".cjs"))
+    return { ok: false };
 
   return { ok: true, isTS, isJSX, ext, filepath, querystring };
 };

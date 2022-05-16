@@ -3,4 +3,7 @@
 node_modules/
 /lib/*.d.ts
 /lib/*.js
+/lib/*.cjs
+/lib/*.mjs
 !/lib/react-refresh-runtime.js
+
