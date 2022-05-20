@@ -3,14 +3,14 @@
         "lib"
     ],
     "compilerOptions": {
-        "target": "ESNext",
+        "target": "ES2020",
         "lib": [
-            "ESNext"
+            "ES2020"
         ],
-        "module": "ESNext",
+        "module": "ES2020",
         "skipLibCheck": true,
         "declaration": true,
-        "moduleResolution": "node",
+        "moduleResolution": "Node",
         "resolveJsonModule": true,
         "forceConsistentCasingInFileNames": true,
         "esModuleInterop": true,

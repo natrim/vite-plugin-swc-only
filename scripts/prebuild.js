@@ -12,10 +12,8 @@ fs.writeFileSync(
   path.join(__dirname, "../cjs/index.ts"),
   file
     .toString()
-    .replace('import * as url from "url";', "")
     .replace(
-      'const __dirname = url.fileURLToPath(new URL(".", import.meta.url));',
+      /((\/\/|\/\*) ?@cjs_start([\s\S]+?)(\/\/)? ?@cjs_end ?(\*\/)?)/gim,
       "",
-    )
-    .replace('file, { assert: { type: "json" } }', "file"),
+    ),
 );

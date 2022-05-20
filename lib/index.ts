@@ -7,9 +7,13 @@ import type {
 } from "@swc/core";
 import { transform } from "@swc/core";
 import type { PluginOption } from "vite";
+// @cjs_start
 import * as url from "url";
+import { createRequire } from "module";
 
 const __dirname = url.fileURLToPath(new URL(".", import.meta.url));
+const require = createRequire(import.meta.url);
+// @cjs_end
 
 const runtimePublicPath = "/@react-refresh";
 const refreshLoadCode = `import{injectIntoGlobalHook}from"${runtimePublicPath}";injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>(type)=>type;`;
@@ -61,7 +65,7 @@ type Options = {
    */
   target?: JscTarget;
   /**
-   * @default { minify: { toplevel: false }, mangle: true }
+   * @default { minify: { toplevel: false }, mangle: { top_level: false } }
    */
   minifyOptions?: JsMinifyOptions;
 } & SWCOptions;
@@ -77,11 +81,121 @@ const getTsConfigOptions = async (mode: "build" | "serve" | "minify") => {
         return Promise.resolve({});
       }
     }
-    tsConfigCache[mode] = await import(file, { assert: { type: "json" } });
+    tsConfigCache[mode] = require(file);
   }
 
   return Promise.resolve(tsConfigCache[mode]);
 };
+
+const swcTargets = [
+  "es3",
+  "es5",
+  "es2015",
+  "es2016",
+  "es2017",
+  "es2018",
+  "es2019",
+  "es2020",
+  "es2021",
+  "es2022",
+];
+
+async function transformFile(
+  code: string,
+  id: string,
+  filepath: string | undefined,
+  tsconfig: any,
+  isTS: boolean = false,
+  isJSX: boolean = false,
+  runtime: "automatic" | "classic",
+  refresh: boolean = false,
+  development: boolean = false,
+  target: any,
+  browserslist: boolean | undefined,
+  swcOptions: SWCOptions,
+) {
+  const jsExtras = isTS
+    ? undefined
+    : {
+        decoratorsBeforeExport:
+          !!tsconfig?.compilerOptions?.experimentalDecorators,
+        exportDefaultFrom: true,
+      };
+  let swcTarget =
+    typeof target !== "undefined"
+      ? target === "modules"
+        ? "es2020"
+        : target === "esnext"
+        ? "es2022"
+        : !swcTargets.includes(target)
+        ? "es2020"
+        : target
+      : tsconfig?.compilerOptions?.target &&
+        swcTargets.includes(tsconfig?.compilerOptions?.target)
+      ? tsconfig?.compilerOptions?.target
+      : "es2020";
+  return await transform(code, {
+    swcrc: false,
+    configFile: false,
+    env: browserslist
+      ? {
+          targets:
+            target === "modules"
+              ? ["es2020", "edge88", "firefox78", "chrome87", "safari13"]
+              : target,
+          mode: "usage",
+          coreJs: "3",
+          dynamicImport: true,
+          ...swcOptions?.env,
+        }
+      : undefined,
+    ...swcOptions,
+    filename: id,
+    sourceFileName: filepath,
+    inputSourceMap: false,
+    sourceMaps: true,
+    jsc: {
+      target: swcTarget,
+      keepClassNames: !!tsconfig?.compilerOptions?.experimentalDecorators,
+      ...swcOptions?.jsc,
+      parser: {
+        syntax: isTS ? "typescript" : "ecmascript",
+        [isTS ? "tsx" : "jsx"]: isJSX,
+        decorators: !!tsconfig?.compilerOptions?.experimentalDecorators,
+        dynamicImport: true,
+        ...jsExtras,
+        ...swcOptions?.jsc?.parser,
+      },
+      transform: {
+        legacyDecorator: !!tsconfig?.compilerOptions?.experimentalDecorators,
+        decoratorMetadata: !!tsconfig?.compilerOptions?.experimentalDecorators
+          ? tsconfig?.compilerOptions?.emitDecoratorMetadata
+          : undefined,
+        ...swcOptions?.jsc?.transform,
+        react: {
+          runtime: runtime,
+          pragma: tsconfig?.compilerOptions?.jsxFactory,
+          pragmaFrag: tsconfig?.compilerOptions?.jsxFragmentFactory,
+          importSource: tsconfig?.compilerOptions?.jsxImportSource,
+          refresh: refresh,
+          useBuiltins: refresh,
+          ...swcOptions?.jsc?.transform?.react,
+          development: development,
+        },
+        optimizer: {
+          ...swcOptions?.jsc?.transform?.optimizer,
+          globals: {
+            ...swcOptions?.jsc?.transform?.optimizer?.globals,
+            vars: {
+              ...define,
+              ...swcOptions?.jsc?.transform?.optimizer?.globals?.vars,
+            },
+          },
+        },
+      },
+    },
+  });
+}
 
 export const serve: (options: Options) => PluginOption = ({
   minify,
@@ -132,59 +246,20 @@ export const serve: (options: Options) => PluginOption = ({
 
       const tsconfig = await getTsConfigOptions("serve");
 
-      const result = await transform(code, {
-        swcrc: false,
-        configFile: false,
-        ...swcOptions,
-        filename: id,
-        sourceFileName: filepath,
-        inputSourceMap: false,
-        sourceMaps: true,
-        jsc: {
-          target:
-            typeof target !== "undefined"
-              ? target
-              : tsconfig?.compilerOptions?.target || "es2020",
-          keepClassNames: !!tsconfig?.compilerOptions?.experimentalDecorators,
-          ...swcOptions?.jsc,
-          parser: {
-            syntax: isTS ? "typescript" : "ecmascript",
-            [isTS ? "tsx" : "jsx"]: isJSX,
-            decorators: !!tsconfig?.compilerOptions?.experimentalDecorators,
-            dynamicImport: true,
-            ...swcOptions?.jsc?.parser,
-          },
-          transform: {
-            legacyDecorator:
-              !!tsconfig?.compilerOptions?.experimentalDecorators,
-            decoratorMetadata: !!tsconfig?.compilerOptions
-              ?.experimentalDecorators
-              ? tsconfig?.compilerOptions?.emitDecoratorMetadata
-              : undefined,
-            ...swcOptions?.jsc?.transform,
-            react: {
-              runtime: runtime,
-              pragma: tsconfig?.compilerOptions?.jsxFactory,
-              pragmaFrag: tsconfig?.compilerOptions?.jsxFragmentFactory,
-              importSource: tsconfig?.compilerOptions?.jsxImportSource,
-              refresh: refresh,
-              useBuiltins: refresh,
-              ...swcOptions?.jsc?.transform?.react,
-              development: true,
-            },
-            optimizer: {
-              ...swcOptions?.jsc?.transform?.optimizer,
-              globals: {
-                ...swcOptions?.jsc?.transform?.optimizer?.globals,
-                vars: {
-                  ...define,
-                  ...swcOptions?.jsc?.transform?.optimizer?.globals?.vars,
-                },
-              },
-            },
-          },
-        },
-      });
+      const result = await transformFile(
+        code,
+        id,
+        filepath,
+        tsconfig,
+        isTS,
+        isJSX,
+        runtime,
+        refresh,
+        true,
+        target ? target : "es2020",
+        false,
+        swcOptions,
+      );
 
       if (!refresh) return result;
       if (!result.code.includes("$RefreshReg$")) return result;
@@ -213,30 +288,31 @@ export const build: (options: Options) => PluginOption = ({
     );
   if (!build) return null;
 
-  let targets: any = undefined;
+  let viteBuildTarget: any = undefined;
   let hasBrowserList = false;
+  try {
+    // @ts-ignore
+    require("browserlist");
+    hasBrowserList = true;
+  } catch (e) {
+    hasBrowserList = false;
+    if (swcOptions?.env) {
+      console.error('"browserlist" is not installed!');
+      process.exit(1);
+    }
+  }
 
   return {
     name: "swc-build",
     apply: "build",
     enforce: "pre",
-    config: async (config) => {
+    config: (config) => {
       if (config.esbuild) define = config.esbuild.define;
       config.esbuild = false;
-      targets = config.build?.target;
       tsConfigCache["build"] = undefined;
-
-      try {
-        // @ts-ignore
-        await import("browserlist");
-        hasBrowserList = true;
-      } catch (e) {
-        hasBrowserList = false;
-        if (swcOptions?.env) {
-          console.error('"browserlist" is not installed!');
-          process.exit(1);
-        }
-      }
+    },
+    configResolved(config) {
+      viteBuildTarget = config.build?.target;
     },
     async transform(code, id) {
       const { ok, isTS, isJSX, filepath } = validFilename(id);
@@ -244,68 +320,20 @@ export const build: (options: Options) => PluginOption = ({
 
       const tsconfig = await getTsConfigOptions("build");
 
-      return await transform(code, {
-        swcrc: false,
-        configFile: false,
-        env: hasBrowserList
-          ? {
-              targets:
-                targets === "modules"
-                  ? ["es2019", "edge88", "firefox78", "chrome87", "safari13.1"]
-                  : targets,
-              mode: "usage",
-              coreJs: "3",
-              dynamicImport: true,
-              ...swcOptions?.env,
-            }
-          : undefined,
-        ...swcOptions,
-        filename: id,
-        sourceFileName: filepath,
-        inputSourceMap: false,
-        sourceMaps: true,
-        jsc: {
-          target:
-            typeof target !== "undefined"
-              ? target
-              : tsconfig?.compilerOptions?.target || "es2020",
-          keepClassNames: !!tsconfig?.compilerOptions?.experimentalDecorators,
-          ...swcOptions?.jsc,
-          parser: {
-            syntax: isTS ? "typescript" : "ecmascript",
-            [isTS ? "tsx" : "jsx"]: isJSX,
-            decorators: !!tsconfig?.compilerOptions?.experimentalDecorators,
-            dynamicImport: true,
-            ...swcOptions?.jsc?.parser,
-          },
-          transform: {
-            legacyDecorator:
-              !!tsconfig?.compilerOptions?.experimentalDecorators,
-            decoratorMetadata: !!tsconfig?.compilerOptions
-              ?.experimentalDecorators
-              ? tsconfig?.compilerOptions?.emitDecoratorMetadata
-              : undefined,
-            ...swcOptions?.jsc?.transform,
-            react: {
-              runtime: runtime,
-              pragma: tsconfig?.compilerOptions?.jsxFactory,
-              pragmaFrag: tsconfig?.compilerOptions?.jsxFragmentFactory,
-              importSource: tsconfig?.compilerOptions?.jsxImportSource,
-              ...swcOptions?.jsc?.transform?.react,
-            },
-            optimizer: {
-              ...swcOptions?.jsc?.transform?.optimizer,
-              globals: {
-                ...swcOptions?.jsc?.transform?.optimizer?.globals,
-                vars: {
-                  ...define,
-                  ...swcOptions?.jsc?.transform?.optimizer?.globals?.vars,
-                },
-              },
-            },
-          },
-        },
-      });
+      return await transformFile(
+        code,
+        id,
+        filepath,
+        tsconfig,
+        isTS,
+        isJSX,
+        runtime,
+        false,
+        false,
+        target ? target : viteBuildTarget || "modules",
+        hasBrowserList,
+        swcOptions,
+      );
     },
   };
 };
@@ -348,17 +376,24 @@ export const minify: (options: Options) => PluginOption = ({
         jsc: {
           minify: {
             safari10: true,
-            compress:
-              minifyOptions?.compress === false
-                ? false
-                : {
-                    toplevel: false,
-                    ...(typeof minifyOptions?.compress === "object"
-                      ? minifyOptions?.compress
-                      : {}),
-                  },
-            mangle: true,
             ...minifyOptions,
+            compress: ["object", "undefined"].includes(
+              typeof minifyOptions?.compress,
+            )
+              ? {
+                  toplevel: false,
+                  ...((minifyOptions?.compress || {}) as object),
+                }
+              : minifyOptions?.compress,
+            mangle: ["object", "undefined"].includes(
+              typeof minifyOptions?.mangle,
+            )
+              ? {
+                  // @ts-ignore
+                  topLevel: false,
+                  ...((minifyOptions?.mangle || {}) as object),
+                }
+              : minifyOptions?.mangle,
             sourceMap: !!outputOptions.sourcemap,
             module: outputOptions.format.startsWith("es"),
             toplevel: outputOptions.format === "cjs",
