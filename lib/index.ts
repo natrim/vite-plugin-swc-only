@@ -6,7 +6,8 @@ import type {
   Options as SWCOptions,
 } from "@swc/core";
 import { transform } from "@swc/core";
-import type { PluginOption } from "vite";
+import type { PluginOption, ResolvedConfig } from "vite";
+import { transformWithEsbuild } from "vite";
 // @cjs_start
 import * as url from "url";
 import { createRequire } from "module";
@@ -207,10 +208,6 @@ export const serve: (options: Options) => PluginOption = ({
   minifyOptions,
   ...swcOptions
 }: Options = {}) => {
-  if (build || minify)
-    throw new Error(
-      "cannot use minify or build in serve plugin, use plugins separately or use the all helper",
-    );
   if (!serve) return null;
 
   let refreshStuffLoad: Partial<PluginOption> = {};
@@ -231,7 +228,7 @@ export const serve: (options: Options) => PluginOption = ({
   }
 
   return {
-    name: "swc-serve",
+    name: "swc:serve",
     apply: "serve",
     enforce: "pre",
     config: (config) => {
@@ -282,10 +279,6 @@ export const build: (options: Options) => PluginOption = ({
   minifyOptions,
   ...swcOptions
 }: Options = {}) => {
-  if (serve || minify)
-    throw new Error(
-      "cannot use minify or serve in build plugin, use plugins separately or use the all helper",
-    );
   if (!build) return null;
 
   let viteBuildTarget: any = undefined;
@@ -303,7 +296,7 @@ export const build: (options: Options) => PluginOption = ({
   }
 
   return {
-    name: "swc-build",
+    name: "swc:build",
     apply: "build",
     enforce: "pre",
     config: (config) => {
@@ -348,13 +341,11 @@ export const minify: (options: Options) => PluginOption = ({
   minifyOptions,
   ...swcOptions
 }: Options = {}) => {
-  if (serve || build)
-    throw new Error(
-      "cannot use build or serve in minify plugin, use plugins separately or use the all helper",
-    );
-  if (!minify) return null;
+  if (!minify) {
+    return esbuildMinifyFallback();
+  }
   return {
-    name: "swc-minify",
+    name: "swc:minify",
     apply: "build",
     enforce: "post",
     config: (config) => {
@@ -409,13 +400,83 @@ export const minify: (options: Options) => PluginOption = ({
   };
 };
 
-function swcPluginsFactory({
-  minify: m = true,
-  build: b = true,
-  serve: s = true,
-  ...options
-}: Options = {}): PluginOption[] {
-  return [s && serve(options), b && build(options), m && minify(options)];
+function esbuildMinifyFallback(): PluginOption {
+  let resolvedConfig: ResolvedConfig;
+  const rollupToEsbuildFormatMap: { [key: string]: any } = {
+    es: "esm",
+    cjs: "cjs",
+    iife: undefined,
+  };
+  const INJECT_HELPERS_IIFE_RE =
+    /(.*)((?:const|var) [^\s]+=function\([^)]*?\){"use strict";)(.*)/;
+  const INJECT_HELPERS_UMD_RE =
+    /(.*)(\(function\([^)]*?\){.+amd.+function\([^)]*?\){"use strict";)(.*)/;
+  return {
+    name: "swc:minify:esbuild",
+    apply: "build",
+    enforce: "post",
+    configResolved(config) {
+      resolvedConfig = config;
+    },
+    async renderChunk(code, chunk, opts) {
+      if (
+        // ignore esbuild false
+        resolvedConfig.esbuild !== false ||
+        // skip if not minify
+        resolvedConfig.build.minify !== "esbuild"
+      ) {
+        return null;
+      }
+      const target = resolvedConfig.build.target;
+      const minify =
+        resolvedConfig.build.minify === "esbuild" &&
+        // Do not minify ES lib output since that would remove pure annotations
+        // and break tree-shaking
+        // https://github.com/vuejs/core/issues/2860#issuecomment-926882793
+        !(resolvedConfig.build.lib && opts.format === "es");
+
+      if ((!target || target === "esnext") && !minify) {
+        return null;
+      }
+
+      const res = await transformWithEsbuild(code, chunk.fileName, {
+        ...(resolvedConfig.esbuild || {}),
+        target: target || undefined,
+        ...(minify
+          ? {
+              minify,
+              treeShaking: true,
+              format: rollupToEsbuildFormatMap[opts.format],
+            }
+          : undefined),
+      });
+
+      if (resolvedConfig.build.lib) {
+        // #7188, esbuild adds helpers out of the UMD and IIFE wrappers, and the
+        // names are minified potentially causing collision with other globals.
+        // We use a regex to inject the helpers inside the wrappers.
+        // We don't need to create a MagicString here because both the helpers and
+        // the headers don't modify the sourcemap
+        const injectHelpers =
+          opts.format === "umd"
+            ? INJECT_HELPERS_UMD_RE
+            : opts.format === "iife"
+            ? INJECT_HELPERS_IIFE_RE
+            : undefined;
+        if (injectHelpers) {
+          res.code = res.code.replace(
+            injectHelpers,
+            (_, helpers, header, rest) => header + helpers + rest,
+          );
+        }
+      }
+      return res;
+    },
+  };
+}
+
+function swcPluginsFactory(options: Options = {}): PluginOption[] {
+  return [serve(options), build(options), minify(options)];
 }
 
 swcPluginsFactory.serve = serve;
