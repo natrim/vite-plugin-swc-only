@@ -198,7 +198,7 @@ async function transformFile(
   });
 }
 
-export const serve: (options: Options) => PluginOption = ({
+export const serve: (options?: Options) => PluginOption = ({
   minify,
   build,
   serve = true,
@@ -269,7 +269,7 @@ export const serve: (options: Options) => PluginOption = ({
   };
 };
 
-export const build: (options: Options) => PluginOption = ({
+export const build: (options?: Options) => PluginOption = ({
   minify,
   build = true,
   serve,
@@ -331,7 +331,7 @@ export const build: (options: Options) => PluginOption = ({
   };
 };
 
-export const minify: (options: Options) => PluginOption = ({
+export const minify: (options?: Options) => PluginOption = ({
   minify = true,
   build,
   serve,
@@ -423,8 +423,15 @@ function esbuildMinifyFallback(): PluginOption {
         // ignore esbuild false
         resolvedConfig.esbuild !== false ||
         // skip if not minify
-        resolvedConfig.build.minify !== "esbuild"
+        !(
+          resolvedConfig.build.minify === "esbuild" ||
+          resolvedConfig.build.minify === true
+        )
       ) {
+        return null;
+      }
+      // @ts-ignore injected by @vitejs/plugin-legacy
+      if (opts.__vite_skip_esbuild__) {
         return null;
       }
       const target = resolvedConfig.build.target;
