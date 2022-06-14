@@ -1,7 +1,7 @@
 {
     "name": "vite-plugin-swc-only",
     "description": "Use the swc in vite",
-    "version": "0.1.10",
+    "version": "0.1.11",
     "license": "MIT",
     "author": "Natrim (https://github.com/natrim)",
     "type": "module",
@@ -17,7 +17,7 @@
         "./*": "./*"
     },
     "repository": "github:natrim/vite-plugin-swc-only",
-    "packageManager": "pnpm@7.1.2",
+    "packageManager": "pnpm@7.2.1",
     "keywords": [
         "vite",
         "vite-plugin",

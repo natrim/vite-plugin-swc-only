@@ -17,6 +17,7 @@ const require = createRequire(import.meta.url);
 // @cjs_end
 
 const runtimePublicPath = "/@react-refresh";
+const virtualRuntimePublicPath = "\0" + runtimePublicPath;
 const refreshLoadCode = `import{injectIntoGlobalHook}from"${runtimePublicPath}";injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>(type)=>type;`;
 
 const validFilename = (id: string) => {
@@ -213,9 +214,12 @@ export const serve: (options?: Options) => PluginOption = ({
   let refreshStuffLoad: Partial<PluginOption> = {};
   if (refresh) {
     refreshStuffLoad = {
-      resolveId: (id) => (id === runtimePublicPath ? id : undefined),
+      resolveId: (id, importer) =>
+        id === runtimePublicPath && importer !== virtualRuntimePublicPath
+          ? virtualRuntimePublicPath
+          : undefined,
       load: (id) =>
-        id === runtimePublicPath
+        id === virtualRuntimePublicPath
           ? fs.readFileSync(
               path.join(__dirname, "react-refresh-runtime.js"),
               "utf-8",
@@ -408,11 +412,11 @@ function esbuildMinifyFallback(): PluginOption {
     iife: undefined,
   };
   const INJECT_HELPERS_IIFE_RE =
-    /(.*)((?:const|var) [^\s]+=function\([^)]*?\){"use strict";)(.*)/;
+    /(.*)((?:const|var) [^\s]+=function\([^)]*?\){"use strict";)(.*)/s;
   const INJECT_HELPERS_UMD_RE =
-    /(.*)(\(function\([^)]*?\){.+amd.+function\([^)]*?\){"use strict";)(.*)/;
+    /(.*)(\(function\([^)]*?\){.+amd.+function\([^)]*?\){"use strict";)(.*)/s;
   return {
-    name: "swc:minify:esbuild",
+    name: "swc:minify:fallback",
     apply: "build",
     enforce: "post",
     configResolved(config) {
