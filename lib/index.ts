@@ -17,7 +17,6 @@ const require = createRequire(import.meta.url);
 // @cjs_end
 
 const runtimePublicPath = "/@react-refresh";
-const virtualRuntimePublicPath = "\0" + runtimePublicPath;
 const refreshLoadCode = `import{injectIntoGlobalHook}from"${runtimePublicPath}";injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>(type)=>type;`;
 
 const validFilename = (id: string) => {
@@ -214,12 +213,9 @@ export const serve: (options?: Options) => PluginOption = ({
   let refreshStuffLoad: Partial<PluginOption> = {};
   if (refresh) {
     refreshStuffLoad = {
-      resolveId: (id, importer) =>
-        id === runtimePublicPath && importer !== virtualRuntimePublicPath
-          ? virtualRuntimePublicPath
-          : undefined,
+      resolveId: (id) => (id === runtimePublicPath ? id : undefined),
       load: (id) =>
-        id === virtualRuntimePublicPath
+        id === runtimePublicPath
           ? fs.readFileSync(
               path.join(__dirname, "react-refresh-runtime.js"),
               "utf-8",
