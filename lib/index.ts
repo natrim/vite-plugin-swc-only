@@ -8,6 +8,8 @@ import type {
 import { transform } from "@swc/core";
 import type { PluginOption, ResolvedConfig } from "vite";
 import { transformWithEsbuild } from "vite";
+import type { FilterPattern } from "@rollup/pluginutils";
+import { createFilter } from "@rollup/pluginutils";
 // @cjs_start
 import * as url from "url";
 import { createRequire } from "module";
@@ -18,9 +20,9 @@ const require = createRequire(import.meta.url);
 
 const runtimePublicPath = "/@react-refresh";
 const refreshLoadCode = `import{injectIntoGlobalHook}from"${runtimePublicPath}";injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>(type)=>type;`;
+const importReactRE = /(^|\n)import\s+(\*\s+as\s+)?React(,|\s+)/;
 
-const validFilename = (id: string) => {
-  if (id.includes("node_modules")) return { ok: false };
+const parsePath = (id: string, code: string) => {
   const [filepath, querystring = ""] = id.split("?");
   const ext =
     (querystring.indexOf(".") !== -1
@@ -30,12 +32,10 @@ const validFilename = (id: string) => {
       ? filepath.substring(filepath.lastIndexOf("."))
       : "") ||
     "";
+  const isJSX = ext === ".jsx" || ext === ".tsx" || importReactRE.test(code);
   const isTS = ext === ".ts" || ext === ".tsx";
-  const isJSX = ext === ".jsx" || ext === ".tsx";
-  if (!(isTS || isJSX || ext === ".js" || ext === ".mjs" || ext === ".cjs"))
-    return { ok: false };
 
-  return { ok: true, isTS, isJSX, ext, filepath, querystring };
+  return { isTS, isJSX, ext, filepath, querystring };
 };
 
 let define: { [key: string]: string } | undefined;
@@ -69,6 +69,8 @@ type Options = {
    * @default { minify: { toplevel: false }, mangle: { top_level: false } }
    */
   minifyOptions?: JsMinifyOptions;
+  include?: FilterPattern;
+  exclude?: FilterPattern;
 } & SWCOptions;
 
 const tsConfigCache: any = {};
@@ -206,6 +208,8 @@ export const serve: (options?: Options) => PluginOption = ({
   runtime = "automatic",
   target,
   minifyOptions,
+  include,
+  exclude,
   ...swcOptions
 }: Options = {}) => {
   if (!serve) return null;
@@ -227,6 +231,11 @@ export const serve: (options?: Options) => PluginOption = ({
     };
   }
 
+  const filter = createFilter(
+    include || /\.mjs|[jt]sx?$/,
+    exclude || /node_modules/,
+  );
+
   return {
     name: "swc:serve",
     apply: "serve",
@@ -238,8 +247,9 @@ export const serve: (options?: Options) => PluginOption = ({
     },
     ...refreshStuffLoad,
     async transform(code, id) {
-      const { ok, isTS, isJSX, filepath } = validFilename(id);
-      if (!ok) return;
+      if (!filter(id)) return;
+
+      const { isTS, isJSX, filepath } = parsePath(id, code);
 
       const tsconfig = await getTsConfigOptions("serve");
 
@@ -276,6 +286,8 @@ export const build: (options?: Options) => PluginOption = ({
   refresh = true,
   runtime = "automatic",
   target,
+  include,
+  exclude,
   minifyOptions,
   ...swcOptions
 }: Options = {}) => {
@@ -295,6 +307,11 @@ export const build: (options?: Options) => PluginOption = ({
     }
   }
 
+  const filter = createFilter(
+    include || /\.mjs|[jt]sx?$/,
+    exclude || /node_modules/,
+  );
+
   return {
     name: "swc:build",
     apply: "build",
@@ -308,8 +325,9 @@ export const build: (options?: Options) => PluginOption = ({
       viteBuildTarget = config.build?.target;
     },
     async transform(code, id) {
-      const { ok, isTS, isJSX, filepath } = validFilename(id);
-      if (!ok) return;
+      if (!filter(id)) return;
+
+      const { isTS, isJSX, filepath } = parsePath(id, code);
 
       const tsconfig = await getTsConfigOptions("build");
 
