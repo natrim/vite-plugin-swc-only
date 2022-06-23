@@ -22,7 +22,7 @@ const runtimePublicPath = "/@react-refresh";
 const refreshLoadCode = `import{injectIntoGlobalHook}from"${runtimePublicPath}";injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>(type)=>type;`;
 const importReactRE = /(^|\n)import\s+(\*\s+as\s+)?React(,|\s+)/;
 
-const parsePath = (id: string, code: string) => {
+const parsePath = (id: string, code: string = "") => {
   const [filepath, querystring = ""] = id.split("?");
   const ext =
     (querystring.indexOf(".") !== -1
@@ -73,21 +73,24 @@ type Options = {
   exclude?: FilterPattern;
 } & SWCOptions;
 
-const tsConfigCache: any = {};
+let tsConfigPath = "";
 const appDirectory = fs.realpathSync(process.cwd());
-const getTsConfigOptions = async (mode: "build" | "serve" | "minify") => {
-  if (!tsConfigCache[mode]) {
+const getTsConfigOptions = (_: "build" | "serve" | "minify") => {
+  if (!tsConfigPath) {
     let file = path.resolve(appDirectory, "tsconfig.json");
-    if (!fs.existsSync(file)) {
+    if (fs.existsSync(file)) {
+      tsConfigPath = file;
+    } else {
       file = path.resolve(appDirectory, "jsconfig.json");
-      if (!fs.existsSync(file)) {
-        return Promise.resolve({});
+      if (fs.existsSync(file)) {
+        tsConfigPath = file;
+      } else {
+        tsConfigPath = "__none__";
       }
     }
-    tsConfigCache[mode] = require(file);
   }
-
-  return Promise.resolve(tsConfigCache[mode]);
+  if (tsConfigPath === "__none__") return {};
+  return require(tsConfigPath);
 };
 
 const swcTargets = [
@@ -104,12 +107,9 @@ const swcTargets = [
 ];
 
 async function transformFile(
-  code: string,
   id: string,
-  filepath: string | undefined,
-  tsconfig: any,
-  isTS: boolean = false,
-  isJSX: boolean = false,
+  code: string,
+  tsconfig: { compilerOptions?: { [index: string]: any } },
   runtime: "automatic" | "classic",
   refresh: boolean = false,
   development: boolean = false,
@@ -117,6 +117,7 @@ async function transformFile(
   browserslist: boolean | undefined,
   swcOptions: SWCOptions,
 ) {
+  const { isTS, isJSX, filepath } = parsePath(id, code);
   const jsExtras = isTS
     ? undefined
     : {
@@ -134,10 +135,12 @@ async function transformFile(
         ? "es2020"
         : target
       : tsconfig?.compilerOptions?.target &&
-        swcTargets.includes(tsconfig?.compilerOptions?.target)
+        swcTargets.includes(
+          tsconfig?.compilerOptions?.target as unknown as string,
+        )
       ? tsconfig?.compilerOptions?.target
       : "es2020";
-  return await transform(code, {
+  return transform(code, {
     swcrc: false,
     configFile: false,
     env: browserslist
@@ -217,17 +220,33 @@ export const serve: (options?: Options) => PluginOption = ({
   let refreshStuffLoad: Partial<PluginOption> = {};
   if (refresh) {
     refreshStuffLoad = {
-      resolveId: (id) => (id === runtimePublicPath ? id : undefined),
-      load: (id) =>
-        id === runtimePublicPath
-          ? fs.readFileSync(
+      async resolveId(id) {
+        return id === runtimePublicPath ? id : null;
+      },
+      async load(id) {
+        if (id === runtimePublicPath) {
+          return new Promise((resolve, reject) => {
+            fs.readFile(
               path.join(__dirname, "react-refresh-runtime.js"),
-              "utf-8",
-            )
-          : undefined,
-      transformIndexHtml: () => [
-        { tag: "script", attrs: { type: "module" }, children: refreshLoadCode },
-      ],
+              (err, buffer) => {
+                if (err) reject(err);
+                else resolve(buffer.toString("utf-8"));
+              },
+            );
+          });
+        }
+
+        return null;
+      },
+      async transformIndexHtml() {
+        return [
+          {
+            tag: "script",
+            attrs: { type: "module" },
+            children: refreshLoadCode,
+          },
+        ];
+      },
     };
   }
 
@@ -240,26 +259,18 @@ export const serve: (options?: Options) => PluginOption = ({
     name: "swc:serve",
     apply: "serve",
     enforce: "pre",
-    config: (config) => {
+    async config(config) {
       if (config.esbuild) define = config.esbuild.define;
       config.esbuild = false;
-      tsConfigCache["serve"] = undefined;
     },
     ...refreshStuffLoad,
     async transform(code, id) {
-      if (!filter(id)) return;
-
-      const { isTS, isJSX, filepath } = parsePath(id, code);
-
-      const tsconfig = await getTsConfigOptions("serve");
-
-      const result = await transformFile(
-        code,
+      if (!filter(id)) return null;
+      const tsconfig = getTsConfigOptions("serve");
+      const result = transformFile(
         id,
-        filepath,
+        code,
         tsconfig,
-        isTS,
-        isJSX,
         runtime,
         refresh,
         true,
@@ -269,12 +280,16 @@ export const serve: (options?: Options) => PluginOption = ({
       );
 
       if (!refresh) return result;
-      if (!result.code.includes("$RefreshReg$")) return result;
+
+      const { code: transformedCode, map: sourcemap } = await result;
+
+      if (!transformedCode.includes("$RefreshReg$"))
+        return { code: transformedCode, map: sourcemap };
 
       const header = `import * as RefreshRuntime from "${runtimePublicPath}";let prevRefreshReg;let prevRefreshSig;if(!window.$RefreshReg$)throw new Error("React refresh preamble was not loaded!");prevRefreshReg=window.$RefreshReg$;prevRefreshSig=window.$RefreshSig$;window.$RefreshReg$=RefreshRuntime.getRefreshReg("${id}");window.$RefreshSig$=RefreshRuntime.createSignatureFunctionForTransform;`;
       const footer = `;window.$RefreshReg$=prevRefreshReg;window.$RefreshSig$=prevRefreshSig;import.meta.hot.accept();RefreshRuntime.enqueueUpdate();`;
 
-      return { code: `${header}${result.code}${footer}`, map: result.map };
+      return { code: `${header}${transformedCode}${footer}`, map: sourcemap };
     },
   };
 };
@@ -316,28 +331,20 @@ export const build: (options?: Options) => PluginOption = ({
     name: "swc:build",
     apply: "build",
     enforce: "pre",
-    config: (config) => {
+    async config(config) {
       if (config.esbuild) define = config.esbuild.define;
       config.esbuild = false;
-      tsConfigCache["build"] = undefined;
     },
-    configResolved(config) {
+    async configResolved(config) {
       viteBuildTarget = config.build?.target;
     },
     async transform(code, id) {
-      if (!filter(id)) return;
-
-      const { isTS, isJSX, filepath } = parsePath(id, code);
-
-      const tsconfig = await getTsConfigOptions("build");
-
-      return await transformFile(
-        code,
+      if (!filter(id)) return null;
+      const tsconfig = getTsConfigOptions("build");
+      return transformFile(
         id,
-        filepath,
+        code,
         tsconfig,
-        isTS,
-        isJSX,
         runtime,
         false,
         false,
@@ -366,15 +373,13 @@ export const minify: (options?: Options) => PluginOption = ({
     name: "swc:minify",
     apply: "build",
     enforce: "post",
-    config: (config) => {
+    async config(config) {
       if (!config.build) config.build = {};
       config.build.minify = false;
-      tsConfigCache["minify"] = undefined;
     },
     async renderChunk(code, chunk, outputOptions) {
-      const tsconfig = await getTsConfigOptions("minify");
-
-      return await transform(code, {
+      const tsconfig = getTsConfigOptions("minify");
+      return transform(code, {
         swcrc: false,
         configFile: false,
         ...swcOptions,

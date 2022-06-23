@@ -1,6 +1,7 @@
 .idea/
 .vscode/
 node_modules/
+/lib/cjs
 /lib/*.d.ts
 /lib/*.js
 /lib/*.cjs
