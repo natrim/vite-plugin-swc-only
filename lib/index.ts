@@ -458,12 +458,7 @@ function esbuildMinifyFallback(): PluginOption {
         return null;
       }
       const target = resolvedConfig.build.target;
-      const minify =
-        resolvedConfig.build.minify === "esbuild" &&
-        // Do not minify ES lib output since that would remove pure annotations
-        // and break tree-shaking
-        // https://github.com/vuejs/core/issues/2860#issuecomment-926882793
-        !(resolvedConfig.build.lib && opts.format === "es");
+      const minify = resolvedConfig.build.minify === "esbuild";
 
       if ((!target || target === "esnext") && !minify) {
         return null;
@@ -474,7 +469,10 @@ function esbuildMinifyFallback(): PluginOption {
         target: target || undefined,
         ...(minify
           ? {
-              minify,
+              // Do not minify ES lib output since that would remove pure annotations
+              // and break tree-shaking
+              // https://github.com/vuejs/core/issues/2860#issuecomment-926882793
+              minify: !(resolvedConfig.build.lib && opts.format === "es"),
               treeShaking: true,
               format: rollupToEsbuildFormatMap[opts.format],
             }
