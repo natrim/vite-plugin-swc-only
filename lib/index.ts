@@ -375,7 +375,8 @@ export const minify: (options?: Options) => PluginOption = ({
     enforce: "post",
     async config(config) {
       if (!config.build) config.build = {};
-      config.build.minify = false;
+      // @ts-ignore force esbuild disabled in minify
+      config.build.minify = 'swc';
     },
     async renderChunk(code, chunk, outputOptions) {
       const tsconfig = getTsConfigOptions("minify");
