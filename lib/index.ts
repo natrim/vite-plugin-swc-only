@@ -396,8 +396,7 @@ export const minify: (options?: Options) => PluginOption = ({
               typeof minifyOptions?.compress,
             )
               ? {
-                  // @ts-ignore alias error
-                  top_level: false,
+                  toplevel: false,
                   ...((minifyOptions?.compress || {}) as object),
                 }
               : minifyOptions?.compress,
@@ -405,7 +404,8 @@ export const minify: (options?: Options) => PluginOption = ({
               typeof minifyOptions?.mangle,
             )
               ? {
-                  top_level: false,
+                  // @ts-ignore
+                  topLevel: false,
                   ...((minifyOptions?.mangle || {}) as object),
                 }
               : minifyOptions?.mangle,
