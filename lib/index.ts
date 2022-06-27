@@ -376,7 +376,7 @@ export const minify: (options?: Options) => PluginOption = ({
     async config(config) {
       if (!config.build) config.build = {};
       // @ts-ignore force esbuild disabled in minify
-      config.build.minify = 'swc';
+      config.build.minify = "swc";
     },
     async renderChunk(code, chunk, outputOptions) {
       const tsconfig = getTsConfigOptions("minify");
@@ -465,17 +465,33 @@ function esbuildMinifyFallback(): PluginOption {
         return null;
       }
 
+      const isEsLibBuild = resolvedConfig.build.lib && opts.format === "es";
+      const isGranularMinify =
+        resolvedConfig.esbuild &&
+        (resolvedConfig.esbuild?.minifyWhitespace ||
+          resolvedConfig.esbuild?.minifySyntax ||
+          resolvedConfig.esbuild?.minifyIdentifiers);
+
       const res = await transformWithEsbuild(code, chunk.fileName, {
         ...(resolvedConfig.esbuild || {}),
         target: target || undefined,
+        format: rollupToEsbuildFormatMap[opts.format],
         ...(minify
           ? {
+              treeShaking: true,
               // Do not minify ES lib output since that would remove pure annotations
               // and break tree-shaking
               // https://github.com/vuejs/core/issues/2860#issuecomment-926882793
-              minify: !(resolvedConfig.build.lib && opts.format === "es"),
-              treeShaking: true,
-              format: rollupToEsbuildFormatMap[opts.format],
+              minify: !isEsLibBuild || isGranularMinify,
+              ...(isEsLibBuild && isGranularMinify
+                ? { minifyWhitespace: false }
+                : isEsLibBuild && !isGranularMinify
+                ? {
+                    minifyWhitespace: false,
+                    minifySyntax: true,
+                    minifyIdentifiers: true,
+                  }
+                : {}),
             }
           : undefined),
       });
