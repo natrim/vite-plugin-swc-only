@@ -287,9 +287,12 @@ export const serve: (options?: Options) => PluginOption = ({
         return { code: transformedCode, map: sourcemap };
 
       const header = `import * as RefreshRuntime from "${runtimePublicPath}";let prevRefreshReg;let prevRefreshSig;if(!window.$RefreshReg$)throw new Error("React refresh preamble was not loaded!");prevRefreshReg=window.$RefreshReg$;prevRefreshSig=window.$RefreshSig$;window.$RefreshReg$=RefreshRuntime.getRefreshReg("${id}");window.$RefreshSig$=RefreshRuntime.createSignatureFunctionForTransform;`;
-      const footer = `;window.$RefreshReg$=prevRefreshReg;window.$RefreshSig$=prevRefreshSig;import.meta.hot.accept();RefreshRuntime.enqueueUpdate();`;
+      const footer = `;window.$RefreshReg$=prevRefreshReg;window.$RefreshSig$=prevRefreshSig;import(/* @vite-ignore */ import.meta.url).then((currentExports) => {RefreshRuntime.registerExportsForReactRefresh("${id}", currentExports);import.meta.hot.accept((nextExports) => {if (!nextExports) return;const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate(currentExports, nextExports);if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);});});`;
 
-      return { code: `${header}${transformedCode}${footer}`, map: sourcemap };
+      return {
+        code: `${header}${transformedCode}${footer}`,
+        map: sourcemap,
+      };
     },
   };
 };
