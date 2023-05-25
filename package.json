@@ -1,7 +1,7 @@
 {
   "name": "vite-plugin-swc-only",
   "description": "Use swc instead of esbuild in vite",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "license": "MIT",
   "author": "Natrim (https://github.com/natrim)",
   "type": "module",
