@@ -315,12 +315,12 @@ export const build: (options?: Options) => PluginOption = ({
   let hasBrowserList = false;
   try {
     // @ts-ignore
-    require("browserlist");
+    require("browserslist");
     hasBrowserList = true;
   } catch (e) {
     hasBrowserList = false;
     if (swcOptions?.env) {
-      console.error('"browserlist" is not installed!');
+      console.error('"browserslist" is not installed!');
       process.exit(1);
     }
   }
