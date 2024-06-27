@@ -2,6 +2,11 @@
 
 Use the [swc](https://swc.rs/) in [vite](https://vitejs.dev/) for transformation and minification.
 
+# DEPRECATED
+no longer developed as Vite has offical [swc plugin](https://github.com/vitejs/vite-plugin-react-swc/tree/main) and using swc for minify make no reason anymore
+
+##
+
 Hot glued from other plugins.
 
 Only React for now, pulls welcome.
